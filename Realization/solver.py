@@ -82,7 +82,7 @@ def final_cls_estimator_cv(Data: np.ndarray, labels: list) -> np.float32:
     '''
     class_weights = compute_class_weight('balanced', classes=np.unique(labels), y=labels)
     class_weights_dict = {class_label: weight for class_label, weight in zip(np.unique(labels), class_weights)}
-    clsf = lightgbm.LGBMClassifier(learning_rate=0.1, max_depth=9, n_estimators=300, random_state=42, class_weight=class_weights_dict, verbose=-1)
+    clsf = lightgbm.LGBMClassifier(n_estimators=40, reg_lambda=0.15, random_state=100, class_weight=class_weights_dict, verbose=-1)
     scores = cross_val_score(clsf, Data, labels, cv=5, scoring='f1')
     return np.mean(scores)
 
@@ -95,11 +95,11 @@ def CV_boosting_clf(Data: np.ndarray, labels: list, model: str = 'LightGBM') -> 
     class_weights = compute_class_weight('balanced', classes=np.unique(labels), y=labels)
     class_weights_dict = {class_label: weight for class_label, weight in zip(np.unique(labels), class_weights)}
     if model == 'LightGBM':
-        lgbm_cl = lightgbm.LGBMClassifier(n_estimators=30, class_weight=class_weights_dict, random_state=123, verbose=-1)
-        scores = cross_validate(lgbm_cl, Data, labels, cv=3, scoring=scoring)
+        lgbm_cl = lightgbm.LGBMClassifier(n_estimators=40, reg_lambda=0.15, class_weight=class_weights_dict, random_state=100, verbose=-1)
+        scores = cross_validate(lgbm_cl, Data, labels, cv=5, scoring=scoring)
     if model == 'Catboost':
-        cat_cl = catboost.CatBoostClassifier(n_estimators=30, class_weights=class_weights_dict, random_state=123, verbose=False)
-        scores = cross_validate(cat_cl, Data, labels, cv=3, scoring=scoring)
+        cat_cl = catboost.CatBoostClassifier(n_estimators=40, l2_leaf_reg=0.15, class_weights=class_weights_dict, random_state=100, verbose=False)
+        scores = cross_validate(cat_cl, Data, labels, cv=5, scoring=scoring)
     return np.mean(scores['test_f1'])
 
 def estimates(Data: dict, labels: list) -> np.ndarray:
