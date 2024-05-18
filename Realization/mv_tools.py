@@ -7,8 +7,6 @@ import sys
 sys.modules['sklearn.neighbors.base'] = sklearn.neighbors._base
 # Модуль ниже требует sklearn=1.1.2, scipy=1.9.1
 from missingpy import MissForest
-from functools import reduce
-from itertools import chain, combinations
 from sklearn import linear_model
 from copy import deepcopy
 from sklearn.experimental import enable_iterative_imputer
@@ -116,8 +114,7 @@ def groups_of_indices(X: np.ndarray) -> tuple([list, list]):
     '''
     Функция осуществляет разбиение индексов столбцов датасета на две группы на основе наличия пропусков в столбцах.
     '''
-    obs_cols = []
-    mis_cols = []
+    obs_cols, mis_cols = [], []
     for col in range(len(X[0])):
         if np.isnan(np.sum(X[:,col])):
             mis_cols.append(col)
@@ -201,19 +198,19 @@ def EM(X: np.ndarray, max_iter: int = 20, rtol: float = 1e-8) -> np.ndarray:
         S_new = np.cov(X_modified.T, bias = 1) + S_tilde / X.shape[0]
         if np.linalg.norm(Mu - Mu_new) < rtol and np.linalg.norm(S - S_new, ord = 2) < rtol:
             break
-        Mu = Mu_new
-        S = S_new
+        Mu, S = Mu_new, S_new
         for i in range(S.shape[0]):
             assert S[i,i]>=0, f'Variance of {i} feature on iteration {iteration} is negative'
             assert np.linalg.det(S)>=0, f'Determinant of Covariance matrix on iteration {iteration} is negative'
         iteration += 1
     return X_modified
 
-def multiple_fill(X: np.ndarray) -> np.ndarray:
+def iterative_fill(X: np.ndarray) -> np.ndarray:
     '''
     Функция применяет алгоритм IterativeImputer, основанный на линейной регрессии, к полученным данным для заполнения пропусков. 
     '''
-    myImputer=IterativeImputer(random_state=42)
+    model = linear_model.LinearRegression()
+    myImputer=IterativeImputer(estimator=model, random_state=42)
     myImputer.fit(X)
     return myImputer.transform(X)
            
@@ -226,31 +223,7 @@ def knn_fill(X: np.ndarray, n: int = 5, weights: str = 'uniform') -> np.ndarray:
 
 def missforest_fill(X: np.ndarray, max_iter: int = 15, n_estimators: int = 100) -> np.ndarray:
     '''
-    Функция применяет алгоритм MissForest к полученным данным для заполнения пропусков. Алгоритм основан на метода Случайного Леса.
+    Функция применяет алгоритм MissForest к полученным данным для заполнения пропусков. Алгоритм основан на методе Случайного Леса.
     '''
     mf = MissForest(max_iter, n_estimators)
     return mf.fit_transform(X)
-    
-def powerset(iterable: set, min_subset_len: int = 2) -> list:
-    '''
-    Функция генерирует все подмножества заданного множества iterable, размер которых не меньше min_subset_len.
-    '''
-    s = list(iterable)
-    return list(chain.from_iterable(combinations(s, r) for r in range(min_subset_len,len(s)+1)))
-
-
-def feature_selection(df: pd.DataFrame, min_subset: int) -> tuple:
-    '''
-    Функция реализует выбор подножества признаков с самым большим по модулю определителем ковариационной матрицы.
-    '''
-    cols=df.columns
-    corr_dets = []
-    cols_power_set=powerset(cols,min_subset)
-    for item in cols_power_set:
-        corr_dets.append((item,np.linalg.det(df[list(item)].corr())))
-    min_corr_det_ind, min_corr_det = -1, 0
-    for i, item in enumerate(corr_dets):
-        if abs(item[1])>abs(min_corr_det):
-            min_corr_det, min_corr_det_ind = item[1], i     
-    return corr_dets[min_corr_det_ind] 
-    
