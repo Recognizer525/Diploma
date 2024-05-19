@@ -110,8 +110,8 @@ def estimates(Data: dict, labels: list) -> np.ndarray:
     results = np.zeros(len(Data)+2)
     for i, key in enumerate(Data.keys()):
         results[i] = final_cls_estimator_cv(Data[key], labels)
-    results[-2] = CV_boosting_clf(Data[key], labels, model='LightGBM')
-    results[-1] = CV_boosting_clf(Data[key], labels, model='Catboost')  
+    results[-2] = CV_boosting_clf(Data[key],labels,model='LightGBM')
+    results[-1] = CV_boosting_clf(Data[key],labels,model='Catboost')  
     return results
 
 def initial_estimates(Data: np.ndarray, labels: list) -> np.ndarray:
@@ -131,3 +131,13 @@ def proximity_estimate(Initial_Data: np.ndarray, Restored_Data: np.ndarray) -> n
     A = np.sqrt(np.sum(abs(Initial_Data-Restored_Data)**2))
     matrix_size = Initial_Data.shape[0]*Initial_Data.shape[1]
     return A/matrix_size
+
+
+
+
+
+
+
+
+
+

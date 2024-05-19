@@ -3,11 +3,7 @@ import matplotlib.pyplot as plt
 import pandas as pd
 import scipy.stats as sps
 import sklearn.neighbors._base 
-import sys
-sys.modules['sklearn.neighbors.base'] = sklearn.neighbors._base
-# Модуль ниже требует sklearn=1.1.2, scipy=1.9.1
-from missingpy import MissForest
-from sklearn import linear_model
+from sklearn import linear_model, ensemble
 from copy import deepcopy
 from sklearn.experimental import enable_iterative_imputer
 from sklearn.impute import IterativeImputer, KNNImputer
@@ -166,51 +162,48 @@ def bootstrap_fill(X: np.ndarray, rs: int = 42) -> np.ndarray:
 
 def EM(X: np.ndarray, max_iter: int = 20, rtol: float = 1e-8) -> np.ndarray:
     '''
-    Функция применяет алгоритм максимального правдоподобия к полученным данным для заполнения пропусков.
+    Функция применяет алгоритм максимального правдоподобия к полученным данным для восстановления пропущенных значений.
     '''
-    C = np.isnan(X)==False
-    one_to_ncol = np.arange(1, X.shape[1] + 1)
-    M = one_to_ncol * (C == False) - 1
-    O = one_to_ncol * C - 1
+    Indicator = np.isnan(X)
+    col_numbers = np.arange(1, X.shape[1] + 1)
+    M, O = col_numbers * Indicator - 1, col_numbers * (Indicator == False) - 1
     Mu = np.nanmean(X, axis = 0)
     observed_rows = np.where(np.isnan(sum(X.T)) == False)[0]
-    S = np.cov(X[observed_rows, ].T)
-    if np.isnan(S).any():
-        S = np.diag(np.nanvar(X, axis = 0))
-    Mu_tilde, S_tilde = {}, np.zeros((X.shape[1], X.shape[1]))
+    K = np.cov(X[observed_rows, ].T)
+    if np.isnan(K).any():
+        K = np.diag(np.nanvar(X, axis = 0))
+    Mu_cond, K_cond_accum = {}, np.zeros((X.shape[1], X.shape[1]))
     X_modified = X.copy()
-    iteration = 0
-    while iteration < max_iter:
+    EM_Iteration = 0
+    while EM_Iteration < max_iter:
         for i in range(X.shape[0]):
-            if set(O[i, ]) != set(one_to_ncol - 1):
-                M_i, O_i = M[i, ][M[i, ] != -1], O[i, ][O[i, ] != -1]
-                S_MM = S[np.ix_(M_i, M_i)]
-                S_MO = S[np.ix_(M_i, O_i)]
-                S_OM = S_MO.T
-                S_OO = S[np.ix_(O_i, O_i)]
-                Mu_tilde[i] = Mu[np.ix_(M_i)] +\
-                    S_MO @ np.linalg.inv(S_OO) @\
-                    (X_modified[i, O_i] - Mu[np.ix_(O_i)])
-                X_modified[i, M_i] = Mu_tilde[i]
-                S_MM_O = S_MM - S_MO @ np.linalg.inv(S_OO) @ S_OM
-                S_tilde[np.ix_(M_i, M_i)] += S_MM_O
-        Mu_new = np.mean(X_modified, axis = 0)
-        S_new = np.cov(X_modified.T, bias = 1) + S_tilde / X.shape[0]
-        if np.linalg.norm(Mu - Mu_new) < rtol and np.linalg.norm(S - S_new, ord = 2) < rtol:
+            if set(O[i, ]) != set(col_numbers - 1):
+                M_i, O_i = M[i, ][M[i, ] > -1], O[i, ][O[i, ] > -1]
+                K_MM, K_MO, K_OO = K[np.ix_(M_i, M_i)], K[np.ix_(M_i, O_i)], K[np.ix_(O_i, O_i)]
+                K_OM = K_MO.T
+                Mu_cond[i] = Mu[np.ix_(M_i)] + K_MO @ np.linalg.inv(K_OO) @ (X_modified[i, O_i] - Mu[np.ix_(O_i)])
+                X_modified[i, M_i] = Mu_cond[i]
+                K_cond = K_MM - K_MO @ np.linalg.inv(K_OO) @ K_OM
+                K_cond_accum[np.ix_(M_i, M_i)] += K_cond
+        Mu_new, K_new = np.mean(X_modified, axis = 0), np.cov(X_modified.T, bias = 1) + K_cond_accum / X.shape[0]
+        if np.linalg.norm(Mu - Mu_new) < rtol and np.linalg.norm(K - K_new, ord = 2) < rtol:
             break
-        Mu, S = Mu_new, S_new
-        for i in range(S.shape[0]):
-            assert S[i,i]>=0, f'Variance of {i} feature on iteration {iteration} is negative'
-            assert np.linalg.det(S)>=0, f'Determinant of Covariance matrix on iteration {iteration} is negative'
-        iteration += 1
+        Mu, K = Mu_new, K_new
+        for i in range(K.shape[0]):
+            assert K[i,i]>=0, f'Variance of {i} feature on iteration {EM_Iteration} is negative'
+            assert np.linalg.det(K)>=0, f'Determinant of Covariance matrix on iteration {EM_Iteration} is negative'
+        EM_Iteration += 1
     return X_modified
 
-def iterative_fill(X: np.ndarray) -> np.ndarray:
+def iterative_fill(X: np.ndarray, suggested_model='RF') -> np.ndarray:
     '''
-    Функция применяет алгоритм IterativeImputer, основанный на линейной регрессии, к полученным данным для заполнения пропусков. 
+    Функция применяет алгоритм IterativeImputer к полученным данным для заполнения пропусков, с использованием предложенной модели.
     '''
-    model = linear_model.LinearRegression()
-    myImputer=IterativeImputer(estimator=model, random_state=42)
+    if suggested_model=='RF':
+        model = ensemble.RandomForestRegressor(n_estimators=200, random_state=0)
+    if suggested_model=='LR':
+        model = linear_model.LinearRegression()
+    myImputer=IterativeImputer(estimator=model, random_state=0, max_iter=5)
     myImputer.fit(X)
     return myImputer.transform(X)
            
@@ -220,10 +213,3 @@ def knn_fill(X: np.ndarray, n: int = 5, weights: str = 'uniform') -> np.ndarray:
     '''
     imputer = KNNImputer(n_neighbors=n, weights=weights)
     return imputer.fit_transform(X)
-
-def missforest_fill(X: np.ndarray, max_iter: int = 15, n_estimators: int = 100) -> np.ndarray:
-    '''
-    Функция применяет алгоритм MissForest к полученным данным для заполнения пропусков. Алгоритм основан на методе Случайного Леса.
-    '''
-    mf = MissForest(max_iter, n_estimators)
-    return mf.fit_transform(X)
