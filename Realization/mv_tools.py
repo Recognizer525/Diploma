@@ -13,7 +13,7 @@ def prob_intervals(number: int = 100, distribution: str = 'norm')->list:
     Функция реализует вычисление вероятностей попадания СВ в интервалы, на которые делится основная (99%) часть плотности нормального распределения.
     '''
     if distribution=='norm':
-        points=np.linspace(-4, 4, number+1)
+        points=np.linspace(-3, 3, number+1)
         F=sps.norm.cdf(points, loc=0, scale=1)
     if distribution=='beta':
         points=np.linspace(0, 1, number+1)
@@ -21,9 +21,9 @@ def prob_intervals(number: int = 100, distribution: str = 'norm')->list:
     weights=list()
     for i in range(len(F)-1):
         weights.append(abs(F[i+1]-F[i]))
+    weights = np.array(weights)
+    weights /= sum(weights)
     assert sum(weights)>0.999 and sum(weights)<=1+1e-5
-    if sum(weights)<1:
-        weights[0]=weights[0]+1-sum(weights)
     return weights
 
 def MNAR_norm(X: np.ndarray, mis_cols: object, size_mv: object, rs: int = 42) -> np.ndarray:
