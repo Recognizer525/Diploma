@@ -8,7 +8,7 @@ from copy import deepcopy
 from sklearn.experimental import enable_iterative_imputer
 from sklearn.impute import IterativeImputer, KNNImputer
 
-def prob_intervals(number: int = 100, distribution: str = 'norm')->list:
+def prob_intervals(number: int = 100, distribution: str = 'norm', a: float = None, b: float = None) -> list:
     '''
     Функция реализует вычисление вероятностей попадания СВ в интервалы, на которые делится основная (99%) часть плотности нормального распределения.
     '''
@@ -17,7 +17,7 @@ def prob_intervals(number: int = 100, distribution: str = 'norm')->list:
         F=sps.norm.cdf(points, loc=0, scale=1)
     if distribution=='beta':
         points=np.linspace(0, 1, number+1)
-        F=sps.beta.cdf(points, a=0.9, b=0.9)
+        F=sps.beta.cdf(points, a=a, b=b)
     weights=list()
     for i in range(len(F)-1):
         weights.append(abs(F[i+1]-F[i]))
@@ -41,12 +41,13 @@ def MNAR_norm(X: np.ndarray, mis_cols: object, size_mv: object, rs: int = 42) ->
         p=prob_intervals(number=X.shape[0],distribution='norm')
         x=np.arange(0,len(X))
         chosen_inds=np.random.RandomState(rs).choice(x, size=size_mv[i], replace=False, p=p)
+        np.savetxt('chosen_inds_norm.csv', chosen_inds, delimiter=',')
         for j in range(len(X)):
             if j in chosen_inds:
                 X1[j,i]=np.nan
     return X1
 
-def MNAR_beta(X: np.ndarray, mis_cols: object, size_mv: object, rs: int = 42) -> np.ndarray:
+def MNAR_beta(X: np.ndarray, mis_cols: object, size_mv: object, rs: int = 42, a: float = 0.9, b: float = 0.9) -> np.ndarray:
     '''
     Функция генерирует неслучайные пропуски; индексы, которым соответствуют пропуски, выбираются с помощью взвешенного случайного выбора, 
     для индекса вероятность быть выбранным определяется бета распределением.
@@ -58,9 +59,10 @@ def MNAR_beta(X: np.ndarray, mis_cols: object, size_mv: object, rs: int = 42) ->
     assert len(mis_cols)==len(size_mv)
     X1 = X.copy() 
     for i in range(len(mis_cols)):
-        p=prob_intervals(number=X.shape[0],distribution='beta')
+        p=prob_intervals(number=X.shape[0], distribution='beta', a=a, b=b)
         x=np.arange(0,len(X))
         chosen_inds=np.random.RandomState(rs).choice(x, size=size_mv[i], replace=False, p=p)
+        np.savetxt(f'chosen_inds_beta_{a}_{b}.csv', chosen_inds, delimiter=',')
         for j in range(len(X)):
             if j in chosen_inds:
                 X1[j,i]=np.nan

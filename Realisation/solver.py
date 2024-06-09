@@ -72,8 +72,11 @@ def cls_estimator_cv(Data: np.ndarray, labels: list, model: str = 'RF') -> np.fl
         print(f'Параметры для AdaBoost: {res.best_params_}')
         clsf = ensemble.AdaBoostClassifier(**res.best_params_, 
                                            random_state=42)
-    scores = cross_val_score(clsf, Data, labels, cv=3, scoring='f1')
-    return np.mean(scores)
+    scores_f1 = cross_val_score(clsf, Data, labels, cv=3, scoring='f1')
+    scores_pr = cross_val_score(clsf, Data, labels, cv=3, scoring='precision')
+    scores_rc = cross_val_score(clsf, Data, labels, cv=3, scoring='recall')
+    scores_roc_auc = cross_val_score(clsf, Data, labels, cv=3, scoring='roc_auc')
+    return np.mean(scores_f1), np.mean(scores_pr), np.mean(scores_rc), np.mean(scores_roc_auc)
 
 def final_cls_estimator_cv(Data: np.ndarray, labels: list) -> np.float32:
     '''
@@ -117,16 +120,17 @@ def initial_estimates(Data: np.ndarray, labels: list) -> np.ndarray:
     '''
     Функция принимает на вход датасет и его метки, вызывает алгоритмы классификации, возвращает поулченные значения метрики качества.
     '''
-    models = ['RF','CatBoost','LightGBM','LogRegression','AdaBoost']
-    results = list()
-    for model in models:
-        results.append(cls_estimator_cv(Data, labels, model))
+    models = ['RF','CatBoost','LightGBM','AdaBoost']
+    metrics_num = 4
+    results = np.zeros((len(models),metrics_num))
+    for i, model in enumerate(models):
+        results[i] = cls_estimator_cv(Data, labels, model)
     return results
 
-def proximity_estimate(Initial_Data: np.ndarray, Restored_Data: np.ndarray) -> np.float64:
+def proximity_estimate(Initial_Data: np.ndarray, Restored_Data: np.ndarray, Missing_Data: np.ndarray) -> np.float64:
     '''
     Функция вычисляет оценку приближенности результатов заполнения данных.
     '''
     A = np.sqrt(np.sum(abs(Initial_Data-Restored_Data)**2))
-    matrix_size = Initial_Data.shape[0]*Initial_Data.shape[1]
+    matrix_size = sum(sum(np.isnan(Missing_Data)))
     return A/matrix_size
